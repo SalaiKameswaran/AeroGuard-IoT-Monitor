@@ -32,65 +32,27 @@ Breadboard and Jumper Wires
 
 Make sure to check component voltages! (MQ135 requires 5V, DHT11 and OLED require 3.3V).
 
-Component
-
-Pin
-
-ESP32 Pin Connection
-
-MQ135 Gas Sensor
-
-VCC / GND
-
-5V / GND
+Component                      Pin                          ESP32 Pin Connection   
 
 
+MQ135 Gas Sensor               VCC / GND                       5V / GND
+                               
+                               A0 (Analog Out)                 SVP (GPIO 36)
 
-A0 (Analog Out)
+DHT11 Sensor                   VCC / GND                       3V3 / GND
 
-SVP (GPIO 36)
+                                DATA                           P4 (GPIO 4)
 
-DHT11 Sensor
+OLED Display                   VCC / GND                       3V3 / GND
 
-VCC / GND
+                                SCL (Clock)                    P22 (GPIO 22)
+              
+                                SDA (Data)                     P21 (GPIO 21)
 
-3V3 / GND
+Buzzer                         Positive (+)                    P12 (GPIO 12)
 
-
-
-DATA
-
-P4 (GPIO 4)
-
-OLED Display
-
-VCC / GND
-
-3V3 / GND
-
-
-
-SCL (Clock)
-
-P22 (GPIO 22)
-
-
-
-SDA (Data)
-
-P21 (GPIO 21)
-
-Buzzer
-
-Positive (+)
-
-P12 (GPIO 12)
-
-
-
-Negative (-)
-
-GND
+                                Negative (-)                    GND
+                                
 
 💻 Software & Installation
 
