@@ -1,0 +1,951 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "provenance": [],
+      "gpuType": "T4",
+      "runtime_attributes": {
+        "runtime_version": "2026.04"
+      },
+      "authorship_tag": "ABX9TyPpdHT5pPmWwxGJYC5PJ0hR",
+      "include_colab_link": true
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    },
+    "accelerator": "GPU"
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "view-in-github",
+        "colab_type": "text"
+      },
+      "source": [
+        "<a href=\"https://colab.research.google.com/github/SalaiKameswaran/AeroGuard-IoT-Monitor/blob/main/Deep%20Learning-Based%20ECG%20Arrhythmia%20Classification%20Using%20a%20Hybrid%20CNN-BiLSTM%20Architecture%20with%20SMOTE-Based%20Class%20Balancing%20on%20the%20MIT-BIH%20Arrhythmia%20Database\" target=\"_parent\"><img src=\"https://colab.research.google.com/assets/colab-badge.svg\" alt=\"Open In Colab\"/></a>"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 2,
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "kMd4xjNXMUzD",
+        "outputId": "400d6fb6-43a9-4832-a463-732130dea7bf"
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Mounted at /content/drive\n"
+          ]
+        }
+      ],
+      "source": [
+        "from google.colab import drive\n",
+        "drive.mount('/content/drive')"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import os\n",
+        "\n",
+        "search_root = '/content/drive/MyDrive'\n",
+        "found_paths = []\n",
+        "\n",
+        "for root, dirs, files in os.walk(search_root):\n",
+        "    for f in files:\n",
+        "        if f == '100.hea' or 'mit-bih' in f.lower() or f.endswith('.zip'):\n",
+        "            found_paths.append(os.path.join(root, f))\n",
+        "\n",
+        "if found_paths:\n",
+        "    print(\"Found these candidates:\")\n",
+        "    for p in found_paths:\n",
+        "        print(\" \", p)\n",
+        "else:\n",
+        "    print(\"Nothing found — check if the dataset is inside a different folder in Drive\")\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "NWNHtF6aN7sL",
+        "outputId": "87e126ae-9c2a-4654-d477-e7d6952ad73d"
+      },
+      "execution_count": 3,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Found these candidates:\n",
+            "  /content/drive/MyDrive/mit-bih-arrhythmia-database-1.0.0.zip\n",
+            "  /content/drive/MyDrive/ PhysioNet PTB-XL.zip\n",
+            "  /content/drive/MyDrive/dataset for computer vision/archive.zip\n",
+            "  /content/drive/MyDrive/dataset for computer vision/archive (1).zip\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import zipfile, os\n",
+        "\n",
+        "zip_path = '/content/drive/MyDrive/mit-bih-arrhythmia-database-1.0.0.zip'\n",
+        "extract_path = '/content/dataset'\n",
+        "\n",
+        "with zipfile.ZipFile(zip_path, 'r') as zip_ref:\n",
+        "    zip_ref.extractall(extract_path)\n",
+        "\n",
+        "total_files = sum(len(files_) for _, _, files_ in os.walk(extract_path))\n",
+        "print(\"Extracted successfully!\")\n",
+        "print(f\"Total files found: {total_files}\")"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "NHbHLSh8OD8C",
+        "outputId": "df750d76-d5a8-463e-da3d-c2997db4c99b"
+      },
+      "execution_count": 4,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Extracted successfully!\n",
+            "Total files found: 705\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "BASE_DIR = None\n",
+        "for root, dirs, files_list in os.walk('/content/dataset'):\n",
+        "    for f in files_list:\n",
+        "        if f == '100.hea':\n",
+        "            BASE_DIR = root\n",
+        "            break\n",
+        "    if BASE_DIR:\n",
+        "        break\n",
+        "\n",
+        "if BASE_DIR:\n",
+        "    print(f\"Dataset found at: {BASE_DIR}\")\n",
+        "else:\n",
+        "    print(\"Dataset NOT found\")"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "NClsbEqROWHh",
+        "outputId": "858565f3-7664-45c4-d5d1-f82e9262b64a"
+      },
+      "execution_count": 5,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Dataset found at: /content/dataset/mit-bih-arrhythmia-database-1.0.0\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "BASE_DIR = '/content/dataset/mit-bih-arrhythmia-database-1.0.0'\n",
+        "\n",
+        "def bandpass_filter(signal, fs=360, lowcut=0.5, highcut=40.0, order=4):\n",
+        "    from scipy.signal import butter, filtfilt\n",
+        "    nyq  = 0.5 * fs\n",
+        "    b, a = butter(order, [lowcut/nyq, highcut/nyq], btype='band')\n",
+        "    return filtfilt(b, a, signal)\n",
+        "\n",
+        "def notch_filter(signal, fs=360, freq=50.0, quality=30):\n",
+        "    from scipy.signal import iirnotch, filtfilt\n",
+        "    b, a = iirnotch(freq / (0.5 * fs), quality)\n",
+        "    return filtfilt(b, a, signal)\n",
+        "\n",
+        "def preprocess(signal, fs=360):\n",
+        "    signal = bandpass_filter(signal, fs)\n",
+        "    signal = notch_filter(signal, fs)\n",
+        "    return signal\n",
+        "\n",
+        "AAMI_MAP = {\n",
+        "    'N':'N', 'L':'N', 'R':'N', 'e':'N', 'j':'N',\n",
+        "    'A':'S', 'a':'S', 'J':'S', 'S':'S',\n",
+        "    'V':'V', 'E':'V',\n",
+        "    'F':'F',\n",
+        "    '/':'Q', 'f':'Q', 'Q':'Q'\n",
+        "}\n",
+        "\n",
+        "BEFORE = 90\n",
+        "AFTER  = 110\n",
+        "WIN    = BEFORE + AFTER\n",
+        "\n",
+        "DS1 = ['101','106','108','109','112','114','115','116','118','119',\n",
+        "       '122','124','201','203','205','207','208','209','215','220',\n",
+        "       '223','230']\n",
+        "\n",
+        "DS2 = ['100','103','105','111','113','117','121','123','200','202',\n",
+        "       '210','212','213','214','219','221','222','228','231','232',\n",
+        "       '233','234']\n",
+        "\n",
+        "def extract_beats_local(record_id, base_dir=BASE_DIR):\n",
+        "    record_path = None\n",
+        "    for root, dirs, files_list in os.walk(base_dir):\n",
+        "        for f in files_list:\n",
+        "            if f == record_id + '.hea':\n",
+        "                record_path = os.path.join(root, record_id)\n",
+        "                break\n",
+        "    if record_path is None:\n",
+        "        raise FileNotFoundError(f\"Record {record_id} not found\")\n",
+        "    rec = wfdb.rdrecord(record_path)\n",
+        "    ann = wfdb.rdann(record_path, 'atr')\n",
+        "    sig = preprocess(rec.p_signal[:, 0])\n",
+        "    beats  = []\n",
+        "    labels = []\n",
+        "    for i, sym in zip(ann.sample, ann.symbol):\n",
+        "        if sym not in AAMI_MAP:\n",
+        "            continue\n",
+        "        if i - BEFORE < 0 or i + AFTER > len(sig):\n",
+        "            continue\n",
+        "        beats.append(sig[i - BEFORE : i + AFTER])\n",
+        "        labels.append(AAMI_MAP[sym])\n",
+        "    return np.array(beats), np.array(labels)\n",
+        "\n",
+        "def load_dataset_local(record_list, label='DS'):\n",
+        "    all_beats  = []\n",
+        "    all_labels = []\n",
+        "    for i, rid in enumerate(record_list):\n",
+        "        print(f\"  Loading {label} {rid}  ({i+1}/{len(record_list)})\", end='\\r')\n",
+        "        try:\n",
+        "            beats, labels = extract_beats_local(rid)\n",
+        "            all_beats.append(beats)\n",
+        "            all_labels.append(labels)\n",
+        "        except Exception as e:\n",
+        "            print(f\"\\n  Skipped {rid}: {e}\")\n",
+        "    if not all_beats:\n",
+        "        raise ValueError(\"No beats loaded — check BASE_DIR\")\n",
+        "    return np.vstack(all_beats), np.concatenate(all_labels)\n",
+        "\n",
+        "print(\"Functions ready!\")"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "EAkeKJytOfVb",
+        "outputId": "6303a28f-8a21-4def-ac6f-ea284d8ed59f"
+      },
+      "execution_count": 6,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Functions ready!\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from google.colab import drive\n",
+        "drive.mount('/content/drive')\n",
+        "\n",
+        "from collections import Counter\n",
+        "from sklearn.preprocessing import LabelEncoder, StandardScaler\n",
+        "from tensorflow.keras.utils import to_categorical\n",
+        "from tensorflow.keras import layers, models, callbacks, regularizers\n",
+        "\n",
+        "save_dir = '/content/drive/MyDrive/ecg_checkpoints'\n",
+        "\n",
+        "X_train_bal = np.load(f'{save_dir}/X_train_bal.npy')\n",
+        "y_train_bal = np.load(f'{save_dir}/y_train_bal.npy')\n",
+        "X_test_sc   = np.load(f'{save_dir}/X_test_sc.npy')\n",
+        "y_test_enc  = np.load(f'{save_dir}/y_test_enc.npy')\n",
+        "\n",
+        "NUM_CLASSES = len(np.unique(y_train_bal))\n",
+        "WIN = X_train_bal.shape[1]\n",
+        "\n",
+        "print(\"Reloaded from Drive checkpoints!\")\n",
+        "print(\"X_train_bal:\", X_train_bal.shape)\n",
+        "print(\"X_test_sc  :\", X_test_sc.shape)\n",
+        "print(\"NUM_CLASSES:\", NUM_CLASSES)\n",
+        "print(\"WIN        :\", WIN)"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "KwuulYmprMPf",
+        "outputId": "01431ada-54e8-4031-e4bf-0718cbe6dc80"
+      },
+      "execution_count": 9,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Drive already mounted at /content/drive; to attempt to forcibly remount, call drive.mount(\"/content/drive\", force_remount=True).\n",
+            "Reloaded from Drive checkpoints!\n",
+            "X_train_bal: (98854, 200)\n",
+            "X_test_sc  : (49697, 200)\n",
+            "NUM_CLASSES: 5\n",
+            "WIN        : 200\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "X_train_final = X_train_bal.reshape(X_train_bal.shape[0], X_train_bal.shape[1], 1)\n",
+        "X_test_final  = X_test_sc.reshape(X_test_sc.shape[0], X_test_sc.shape[1], 1)\n",
+        "\n",
+        "y_train_cat = to_categorical(y_train_bal, NUM_CLASSES)\n",
+        "y_test_cat  = to_categorical(y_test_enc, NUM_CLASSES)\n",
+        "\n",
+        "print(\"X_train_final:\", X_train_final.shape)\n",
+        "print(\"X_test_final :\", X_test_final.shape)"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "quyNZHzErYPx",
+        "outputId": "b1d93561-d950-4902-b1a6-ed09cb80013a"
+      },
+      "execution_count": 10,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "X_train_final: (98854, 200, 1)\n",
+            "X_test_final : (49697, 200, 1)\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "def build_regularized_model(input_shape, num_classes):\n",
+        "    inp = layers.Input(shape=input_shape)\n",
+        "\n",
+        "    x = layers.Conv1D(128, 5, padding='same', activation='relu',\n",
+        "                       kernel_regularizer=regularizers.l2(1e-4))(inp)\n",
+        "    x = layers.BatchNormalization()(x)\n",
+        "    x = layers.Conv1D(128, 5, padding='same', activation='relu',\n",
+        "                       kernel_regularizer=regularizers.l2(1e-4))(x)\n",
+        "    x = layers.BatchNormalization()(x)\n",
+        "    x = layers.MaxPooling1D(2)(x)\n",
+        "    x = layers.Dropout(0.3)(x)\n",
+        "\n",
+        "    x = layers.Conv1D(256, 3, padding='same', activation='relu',\n",
+        "                       kernel_regularizer=regularizers.l2(1e-4))(x)\n",
+        "    x = layers.BatchNormalization()(x)\n",
+        "    x = layers.Conv1D(256, 3, padding='same', activation='relu',\n",
+        "                       kernel_regularizer=regularizers.l2(1e-4))(x)\n",
+        "    x = layers.BatchNormalization()(x)\n",
+        "    x = layers.MaxPooling1D(2)(x)\n",
+        "    x = layers.Dropout(0.3)(x)\n",
+        "\n",
+        "    x = layers.Conv1D(512, 3, padding='same', activation='relu',\n",
+        "                       kernel_regularizer=regularizers.l2(1e-4))(x)\n",
+        "    x = layers.BatchNormalization()(x)\n",
+        "    x = layers.MaxPooling1D(2)(x)\n",
+        "    x = layers.Dropout(0.3)(x)\n",
+        "\n",
+        "    x = layers.Bidirectional(layers.LSTM(256, return_sequences=True,\n",
+        "                                          kernel_regularizer=regularizers.l2(1e-4)))(x)\n",
+        "    x = layers.Dropout(0.3)(x)\n",
+        "    x = layers.Bidirectional(layers.LSTM(128,\n",
+        "                                          kernel_regularizer=regularizers.l2(1e-4)))(x)\n",
+        "\n",
+        "    x = layers.Dense(256, activation='relu', kernel_regularizer=regularizers.l2(1e-4))(x)\n",
+        "    x = layers.Dropout(0.4)(x)\n",
+        "    x = layers.Dense(128, activation='relu', kernel_regularizer=regularizers.l2(1e-4))(x)\n",
+        "    x = layers.Dropout(0.4)(x)\n",
+        "    out = layers.Dense(num_classes, activation='softmax')(x)\n",
+        "\n",
+        "    return models.Model(inp, out)\n",
+        "\n",
+        "model = build_regularized_model((WIN, 1), NUM_CLASSES)\n",
+        "optimizer = tf.keras.optimizers.Adam(learning_rate=0.0003)\n",
+        "model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['accuracy'])\n",
+        "print(\"Model rebuilt!\")"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "DUOFPTUQrcoC",
+        "outputId": "b580eda8-b3bd-4de7-b7e2-b8ee0b6615bf"
+      },
+      "execution_count": 11,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Model rebuilt!\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "early_stop = callbacks.EarlyStopping(monitor='val_accuracy', patience=15, restore_best_weights=True, verbose=1)\n",
+        "reduce_lr  = callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=6, min_lr=1e-6, verbose=1)\n",
+        "checkpoint = callbacks.ModelCheckpoint(f'{save_dir}/best_ecg_model_v2.h5', monitor='val_accuracy', save_best_only=True, verbose=1)\n",
+        "\n",
+        "history = model.fit(\n",
+        "    X_train_final, y_train_cat,\n",
+        "    validation_data=(X_test_final, y_test_cat),\n",
+        "    epochs=80,\n",
+        "    batch_size=128,\n",
+        "    callbacks=[early_stop, reduce_lr, checkpoint],\n",
+        "    verbose=1\n",
+        ")"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "9Irab-sTrgQt",
+        "outputId": "eeea8392-9210-4aa3-8995-c84c2f9324f6"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Epoch 1/80\n",
+            "\u001b[1m773/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m\u001b[0m \u001b[1m0s\u001b[0m 63ms/step - accuracy: 0.8383 - loss: 0.8178\n",
+            "Epoch 1: val_accuracy improved from None to 0.62481, saving model to /content/drive/MyDrive/ecg_checkpoints/best_ecg_model_v2.h5\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "WARNING:absl:You are saving your model as an HDF5 file via `model.save()` or `keras.saving.save_model(model)`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')` or `keras.saving.save_model(model, 'my_model.keras')`. \n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "\n",
+            "Epoch 1: finished saving model to /content/drive/MyDrive/ecg_checkpoints/best_ecg_model_v2.h5\n",
+            "\u001b[1m773/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m\u001b[0m \u001b[1m84s\u001b[0m 80ms/step - accuracy: 0.9185 - loss: 0.5857 - val_accuracy: 0.6248 - val_loss: 1.6379 - learning_rate: 3.0000e-04\n",
+            "Epoch 2/80\n",
+            "\u001b[1m772/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m━\u001b[0m \u001b[1m0s\u001b[0m 62ms/step - accuracy: 0.9726 - loss: 0.3800\n",
+            "Epoch 2: val_accuracy improved from 0.62481 to 0.67481, saving model to /content/drive/MyDrive/ecg_checkpoints/best_ecg_model_v2.h5\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "WARNING:absl:You are saving your model as an HDF5 file via `model.save()` or `keras.saving.save_model(model)`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')` or `keras.saving.save_model(model, 'my_model.keras')`. \n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "\n",
+            "Epoch 2: finished saving model to /content/drive/MyDrive/ecg_checkpoints/best_ecg_model_v2.h5\n",
+            "\u001b[1m773/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m\u001b[0m \u001b[1m57s\u001b[0m 74ms/step - accuracy: 0.9761 - loss: 0.3567 - val_accuracy: 0.6748 - val_loss: 1.9463 - learning_rate: 3.0000e-04\n",
+            "Epoch 3/80\n",
+            "\u001b[1m772/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m━\u001b[0m \u001b[1m0s\u001b[0m 63ms/step - accuracy: 0.9822 - loss: 0.3013\n",
+            "Epoch 3: val_accuracy improved from 0.67481 to 0.68056, saving model to /content/drive/MyDrive/ecg_checkpoints/best_ecg_model_v2.h5\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "WARNING:absl:You are saving your model as an HDF5 file via `model.save()` or `keras.saving.save_model(model)`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')` or `keras.saving.save_model(model, 'my_model.keras')`. \n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "\n",
+            "Epoch 3: finished saving model to /content/drive/MyDrive/ecg_checkpoints/best_ecg_model_v2.h5\n",
+            "\u001b[1m773/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m\u001b[0m \u001b[1m58s\u001b[0m 75ms/step - accuracy: 0.9833 - loss: 0.2872 - val_accuracy: 0.6806 - val_loss: 1.8288 - learning_rate: 3.0000e-04\n",
+            "Epoch 4/80\n",
+            "\u001b[1m772/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m━\u001b[0m \u001b[1m0s\u001b[0m 62ms/step - accuracy: 0.9868 - loss: 0.2470\n",
+            "Epoch 4: val_accuracy improved from 0.68056 to 0.70761, saving model to /content/drive/MyDrive/ecg_checkpoints/best_ecg_model_v2.h5\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "WARNING:absl:You are saving your model as an HDF5 file via `model.save()` or `keras.saving.save_model(model)`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')` or `keras.saving.save_model(model, 'my_model.keras')`. \n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "\n",
+            "Epoch 4: finished saving model to /content/drive/MyDrive/ecg_checkpoints/best_ecg_model_v2.h5\n",
+            "\u001b[1m773/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m\u001b[0m \u001b[1m57s\u001b[0m 74ms/step - accuracy: 0.9878 - loss: 0.2358 - val_accuracy: 0.7076 - val_loss: 1.5972 - learning_rate: 3.0000e-04\n",
+            "Epoch 5/80\n",
+            "\u001b[1m772/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m━\u001b[0m \u001b[1m0s\u001b[0m 62ms/step - accuracy: 0.9903 - loss: 0.2043\n",
+            "Epoch 5: val_accuracy improved from 0.70761 to 0.72785, saving model to /content/drive/MyDrive/ecg_checkpoints/best_ecg_model_v2.h5\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "WARNING:absl:You are saving your model as an HDF5 file via `model.save()` or `keras.saving.save_model(model)`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')` or `keras.saving.save_model(model, 'my_model.keras')`. \n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "\n",
+            "Epoch 5: finished saving model to /content/drive/MyDrive/ecg_checkpoints/best_ecg_model_v2.h5\n",
+            "\u001b[1m773/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m\u001b[0m \u001b[1m57s\u001b[0m 74ms/step - accuracy: 0.9897 - loss: 0.1980 - val_accuracy: 0.7279 - val_loss: 1.5162 - learning_rate: 3.0000e-04\n",
+            "Epoch 6/80\n",
+            "\u001b[1m772/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m━\u001b[0m \u001b[1m0s\u001b[0m 62ms/step - accuracy: 0.9905 - loss: 0.1777\n",
+            "Epoch 6: val_accuracy did not improve from 0.72785\n",
+            "\u001b[1m773/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m\u001b[0m \u001b[1m55s\u001b[0m 72ms/step - accuracy: 0.9908 - loss: 0.1714 - val_accuracy: 0.7188 - val_loss: 1.6745 - learning_rate: 3.0000e-04\n",
+            "Epoch 7/80\n",
+            "\u001b[1m772/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m━\u001b[0m \u001b[1m0s\u001b[0m 62ms/step - accuracy: 0.9922 - loss: 0.1500\n",
+            "Epoch 7: val_accuracy did not improve from 0.72785\n",
+            "\u001b[1m773/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m\u001b[0m \u001b[1m55s\u001b[0m 72ms/step - accuracy: 0.9923 - loss: 0.1457 - val_accuracy: 0.6459 - val_loss: 1.8407 - learning_rate: 3.0000e-04\n",
+            "Epoch 8/80\n",
+            "\u001b[1m772/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m━\u001b[0m \u001b[1m0s\u001b[0m 62ms/step - accuracy: 0.9936 - loss: 0.1298\n",
+            "Epoch 8: val_accuracy did not improve from 0.72785\n",
+            "\u001b[1m773/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m\u001b[0m \u001b[1m55s\u001b[0m 72ms/step - accuracy: 0.9929 - loss: 0.1285 - val_accuracy: 0.7041 - val_loss: 1.7331 - learning_rate: 3.0000e-04\n",
+            "Epoch 9/80\n",
+            "\u001b[1m772/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m━\u001b[0m \u001b[1m0s\u001b[0m 62ms/step - accuracy: 0.9941 - loss: 0.1140\n",
+            "Epoch 9: val_accuracy did not improve from 0.72785\n",
+            "\u001b[1m773/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m\u001b[0m \u001b[1m55s\u001b[0m 71ms/step - accuracy: 0.9933 - loss: 0.1141 - val_accuracy: 0.7012 - val_loss: 1.6969 - learning_rate: 3.0000e-04\n",
+            "Epoch 10/80\n",
+            "\u001b[1m772/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m━\u001b[0m \u001b[1m0s\u001b[0m 62ms/step - accuracy: 0.9935 - loss: 0.1063\n",
+            "Epoch 10: val_accuracy improved from 0.72785 to 0.76514, saving model to /content/drive/MyDrive/ecg_checkpoints/best_ecg_model_v2.h5\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "WARNING:absl:You are saving your model as an HDF5 file via `model.save()` or `keras.saving.save_model(model)`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')` or `keras.saving.save_model(model, 'my_model.keras')`. \n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "\n",
+            "Epoch 10: finished saving model to /content/drive/MyDrive/ecg_checkpoints/best_ecg_model_v2.h5\n",
+            "\u001b[1m773/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m\u001b[0m \u001b[1m57s\u001b[0m 74ms/step - accuracy: 0.9937 - loss: 0.1030 - val_accuracy: 0.7651 - val_loss: 1.1150 - learning_rate: 3.0000e-04\n",
+            "Epoch 11/80\n",
+            "\u001b[1m772/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m━\u001b[0m \u001b[1m0s\u001b[0m 62ms/step - accuracy: 0.9936 - loss: 0.0980\n",
+            "Epoch 11: val_accuracy did not improve from 0.76514\n",
+            "\u001b[1m773/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m\u001b[0m \u001b[1m80s\u001b[0m 72ms/step - accuracy: 0.9938 - loss: 0.0953 - val_accuracy: 0.7224 - val_loss: 1.4199 - learning_rate: 3.0000e-04\n",
+            "Epoch 12/80\n",
+            "\u001b[1m772/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m━\u001b[0m \u001b[1m0s\u001b[0m 62ms/step - accuracy: 0.9950 - loss: 0.0865\n",
+            "Epoch 12: val_accuracy did not improve from 0.76514\n",
+            "\u001b[1m773/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m\u001b[0m \u001b[1m55s\u001b[0m 72ms/step - accuracy: 0.9945 - loss: 0.0857 - val_accuracy: 0.7412 - val_loss: 1.2606 - learning_rate: 3.0000e-04\n",
+            "Epoch 13/80\n",
+            "\u001b[1m772/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m━\u001b[0m \u001b[1m0s\u001b[0m 62ms/step - accuracy: 0.9946 - loss: 0.0811\n",
+            "Epoch 13: val_accuracy did not improve from 0.76514\n",
+            "\u001b[1m773/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m\u001b[0m \u001b[1m55s\u001b[0m 72ms/step - accuracy: 0.9945 - loss: 0.0804 - val_accuracy: 0.7644 - val_loss: 1.5089 - learning_rate: 3.0000e-04\n",
+            "Epoch 14/80\n",
+            "\u001b[1m772/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m━\u001b[0m \u001b[1m0s\u001b[0m 62ms/step - accuracy: 0.9947 - loss: 0.0766\n",
+            "Epoch 14: val_accuracy did not improve from 0.76514\n",
+            "\u001b[1m773/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m\u001b[0m \u001b[1m55s\u001b[0m 71ms/step - accuracy: 0.9945 - loss: 0.0768 - val_accuracy: 0.7543 - val_loss: 1.1815 - learning_rate: 3.0000e-04\n",
+            "Epoch 15/80\n",
+            "\u001b[1m772/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m━\u001b[0m \u001b[1m0s\u001b[0m 62ms/step - accuracy: 0.9950 - loss: 0.0731\n",
+            "Epoch 15: val_accuracy did not improve from 0.76514\n",
+            "\u001b[1m773/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m\u001b[0m \u001b[1m55s\u001b[0m 71ms/step - accuracy: 0.9949 - loss: 0.0731 - val_accuracy: 0.6622 - val_loss: 1.7639 - learning_rate: 3.0000e-04\n",
+            "Epoch 16/80\n",
+            "\u001b[1m772/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m━\u001b[0m \u001b[1m0s\u001b[0m 62ms/step - accuracy: 0.9944 - loss: 0.0717\n",
+            "Epoch 16: ReduceLROnPlateau reducing learning rate to 0.0001500000071246177.\n",
+            "\n",
+            "Epoch 16: val_accuracy did not improve from 0.76514\n",
+            "\u001b[1m773/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m\u001b[0m \u001b[1m55s\u001b[0m 71ms/step - accuracy: 0.9946 - loss: 0.0720 - val_accuracy: 0.7254 - val_loss: 1.4183 - learning_rate: 3.0000e-04\n",
+            "Epoch 17/80\n",
+            "\u001b[1m772/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m━\u001b[0m \u001b[1m0s\u001b[0m 62ms/step - accuracy: 0.9979 - loss: 0.0593\n",
+            "Epoch 17: val_accuracy did not improve from 0.76514\n",
+            "\u001b[1m773/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m\u001b[0m \u001b[1m55s\u001b[0m 72ms/step - accuracy: 0.9980 - loss: 0.0577 - val_accuracy: 0.7585 - val_loss: 1.3050 - learning_rate: 1.5000e-04\n",
+            "Epoch 18/80\n",
+            "\u001b[1m772/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m━\u001b[0m \u001b[1m0s\u001b[0m 62ms/step - accuracy: 0.9988 - loss: 0.0508\n",
+            "Epoch 18: val_accuracy improved from 0.76514 to 0.76791, saving model to /content/drive/MyDrive/ecg_checkpoints/best_ecg_model_v2.h5\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "WARNING:absl:You are saving your model as an HDF5 file via `model.save()` or `keras.saving.save_model(model)`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')` or `keras.saving.save_model(model, 'my_model.keras')`. \n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "\n",
+            "Epoch 18: finished saving model to /content/drive/MyDrive/ecg_checkpoints/best_ecg_model_v2.h5\n",
+            "\u001b[1m773/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m\u001b[0m \u001b[1m58s\u001b[0m 75ms/step - accuracy: 0.9981 - loss: 0.0513 - val_accuracy: 0.7679 - val_loss: 1.2588 - learning_rate: 1.5000e-04\n",
+            "Epoch 19/80\n",
+            "\u001b[1m772/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m━\u001b[0m \u001b[1m0s\u001b[0m 62ms/step - accuracy: 0.9982 - loss: 0.0478\n",
+            "Epoch 19: val_accuracy improved from 0.76791 to 0.78079, saving model to /content/drive/MyDrive/ecg_checkpoints/best_ecg_model_v2.h5\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "WARNING:absl:You are saving your model as an HDF5 file via `model.save()` or `keras.saving.save_model(model)`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')` or `keras.saving.save_model(model, 'my_model.keras')`. \n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "\n",
+            "Epoch 19: finished saving model to /content/drive/MyDrive/ecg_checkpoints/best_ecg_model_v2.h5\n",
+            "\u001b[1m773/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m\u001b[0m \u001b[1m57s\u001b[0m 74ms/step - accuracy: 0.9980 - loss: 0.0472 - val_accuracy: 0.7808 - val_loss: 1.1895 - learning_rate: 1.5000e-04\n",
+            "Epoch 20/80\n",
+            "\u001b[1m772/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m━\u001b[0m \u001b[1m0s\u001b[0m 62ms/step - accuracy: 0.9974 - loss: 0.0466\n",
+            "Epoch 20: val_accuracy did not improve from 0.78079\n",
+            "\u001b[1m773/773\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m\u001b[0m \u001b[1m55s\u001b[0m 71ms/step - accuracy: 0.9977 - loss: 0.0454 - val_accuracy: 0.7444 - val_loss: 1.5592 - learning_rate: 1.5000e-04\n",
+            "Epoch 21/80\n",
+            "\u001b[1m294/773\u001b[0m \u001b[32m━━━━━━━\u001b[0m\u001b[37m━━━━━━━━━━━━━\u001b[0m \u001b[1m29s\u001b[0m 62ms/step - accuracy: 0.9973 - loss: 0.0449"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "print(\"test\")\n",
+        "import tensorflow as tf\n",
+        "print(\"GPU:\", tf.config.list_physical_devices('GPU'))"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "HiAQL8_oxu-T",
+        "outputId": "f09f7e83-ec32-4719-8af8-959c4caf76bc"
+      },
+      "execution_count": 2,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "test\n",
+            "GPU: [PhysicalDevice(name='/physical_device:GPU:0', device_type='GPU')]\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import os\n",
+        "import numpy as np\n",
+        "import tensorflow as tf\n",
+        "from tensorflow.keras import layers, models, callbacks, regularizers\n",
+        "from tensorflow.keras.utils import to_categorical\n",
+        "from sklearn.metrics import classification_report, confusion_matrix\n",
+        "from sklearn.preprocessing import LabelEncoder\n",
+        "from collections import Counter\n",
+        "\n",
+        "from google.colab import drive\n",
+        "drive.mount('/content/drive')\n",
+        "\n",
+        "save_dir = '/content/drive/MyDrive/ecg_checkpoints'\n",
+        "print(\"Ready! GPU:\", tf.config.list_physical_devices('GPU'))"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "nQcHH_LNx6iB",
+        "outputId": "05ebc740-d11a-4bf3-f371-3b727ad0c340"
+      },
+      "execution_count": 3,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Mounted at /content/drive\n",
+            "Ready! GPU: [PhysicalDevice(name='/physical_device:GPU:0', device_type='GPU')]\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "X_train_bal = np.load(f'{save_dir}/X_train_bal.npy')\n",
+        "y_train_bal = np.load(f'{save_dir}/y_train_bal.npy')\n",
+        "X_test_sc   = np.load(f'{save_dir}/X_test_sc.npy')\n",
+        "y_test_enc  = np.load(f'{save_dir}/y_test_enc.npy')\n",
+        "y_train_raw = np.load(f'{save_dir}/y_train_raw.npy')\n",
+        "\n",
+        "NUM_CLASSES = len(np.unique(y_train_bal))\n",
+        "WIN = X_train_bal.shape[1]\n",
+        "\n",
+        "le = LabelEncoder()\n",
+        "le.fit(y_train_raw)\n",
+        "\n",
+        "X_train_final = X_train_bal.reshape(X_train_bal.shape[0], X_train_bal.shape[1], 1)\n",
+        "X_test_final  = X_test_sc.reshape(X_test_sc.shape[0], X_test_sc.shape[1], 1)\n",
+        "\n",
+        "y_train_cat = to_categorical(y_train_bal, NUM_CLASSES)\n",
+        "y_test_cat  = to_categorical(y_test_enc, NUM_CLASSES)\n",
+        "\n",
+        "print(\"Reloaded successfully!\")\n",
+        "print(\"Classes:\", le.classes_)\n",
+        "print(\"X_train_final:\", X_train_final.shape)"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "0RrAvpIAyBhj",
+        "outputId": "9d6146d0-f225-46a6-8612-291a3c6d3089"
+      },
+      "execution_count": 4,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Reloaded successfully!\n",
+            "Classes: ['F' 'N' 'Q' 'S' 'V']\n",
+            "X_train_final: (98854, 200, 1)\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "def build_regularized_model(input_shape, num_classes):\n",
+        "    inp = layers.Input(shape=input_shape)\n",
+        "    x = layers.Conv1D(128, 5, padding='same', activation='relu', kernel_regularizer=regularizers.l2(1e-4))(inp)\n",
+        "    x = layers.BatchNormalization()(x)\n",
+        "    x = layers.Conv1D(128, 5, padding='same', activation='relu', kernel_regularizer=regularizers.l2(1e-4))(x)\n",
+        "    x = layers.BatchNormalization()(x)\n",
+        "    x = layers.MaxPooling1D(2)(x)\n",
+        "    x = layers.Dropout(0.3)(x)\n",
+        "\n",
+        "    x = layers.Conv1D(256, 3, padding='same', activation='relu', kernel_regularizer=regularizers.l2(1e-4))(x)\n",
+        "    x = layers.BatchNormalization()(x)\n",
+        "    x = layers.Conv1D(256, 3, padding='same', activation='relu', kernel_regularizer=regularizers.l2(1e-4))(x)\n",
+        "    x = layers.BatchNormalization()(x)\n",
+        "    x = layers.MaxPooling1D(2)(x)\n",
+        "    x = layers.Dropout(0.3)(x)\n",
+        "\n",
+        "    x = layers.Conv1D(512, 3, padding='same', activation='relu', kernel_regularizer=regularizers.l2(1e-4))(x)\n",
+        "    x = layers.BatchNormalization()(x)\n",
+        "    x = layers.MaxPooling1D(2)(x)\n",
+        "    x = layers.Dropout(0.3)(x)\n",
+        "\n",
+        "    x = layers.Bidirectional(layers.LSTM(256, return_sequences=True, kernel_regularizer=regularizers.l2(1e-4)))(x)\n",
+        "    x = layers.Dropout(0.3)(x)\n",
+        "    x = layers.Bidirectional(layers.LSTM(128, kernel_regularizer=regularizers.l2(1e-4)))(x)\n",
+        "\n",
+        "    x = layers.Dense(256, activation='relu', kernel_regularizer=regularizers.l2(1e-4))(x)\n",
+        "    x = layers.Dropout(0.4)(x)\n",
+        "    x = layers.Dense(128, activation='relu', kernel_regularizer=regularizers.l2(1e-4))(x)\n",
+        "    x = layers.Dropout(0.4)(x)\n",
+        "    out = layers.Dense(num_classes, activation='softmax')(x)\n",
+        "    return models.Model(inp, out)\n",
+        "\n",
+        "model = build_regularized_model((WIN, 1), NUM_CLASSES)\n",
+        "model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0003),\n",
+        "              loss='categorical_crossentropy', metrics=['accuracy'])\n",
+        "model.load_weights(f'{save_dir}/best_ecg_model_v2.h5')\n",
+        "print(\"Best weights loaded!\")"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "ZOrmVz5HyFnx",
+        "outputId": "3d940e2c-06fa-4642-95bb-7b4707fef15a"
+      },
+      "execution_count": 5,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Best weights loaded!\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "y_pred = model.predict(X_test_final)\n",
+        "y_pred_classes = np.argmax(y_pred, axis=1)\n",
+        "y_true_classes = np.argmax(y_test_cat, axis=1)\n",
+        "\n",
+        "print(classification_report(y_true_classes, y_pred_classes, target_names=le.classes_))\n",
+        "print(\"\\nConfusion Matrix:\")\n",
+        "print(confusion_matrix(y_true_classes, y_pred_classes))"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "ZSlyUn-iyMOF",
+        "outputId": "4e67e471-c0ec-4ecb-bfb4-6fb4abf0d80f"
+      },
+      "execution_count": 6,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "\u001b[1m1554/1554\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m\u001b[0m \u001b[1m26s\u001b[0m 13ms/step\n",
+            "              precision    recall  f1-score   support\n",
+            "\n",
+            "           F       0.00      0.03      0.01       388\n",
+            "           N       0.94      0.84      0.89     44245\n",
+            "           Q       0.00      0.00      0.00         7\n",
+            "           S       0.08      0.10      0.09      1837\n",
+            "           V       0.53      0.85      0.65      3220\n",
+            "\n",
+            "    accuracy                           0.81     49697\n",
+            "   macro avg       0.31      0.36      0.33     49697\n",
+            "weighted avg       0.88      0.81      0.84     49697\n",
+            "\n",
+            "\n",
+            "Confusion Matrix:\n",
+            "[[   12   293     0     1    82]\n",
+            " [ 2459 37325    21  2176  2264]\n",
+            " [    0     5     0     0     2]\n",
+            " [   42  1556     2   187    50]\n",
+            " [   56   406     3    24  2731]]\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from google.colab import files\n",
+        "files.download(f'{save_dir}/best_ecg_model_v2.h5')\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 17
+        },
+        "id": "lzm4yQ9byyGk",
+        "outputId": "2b632359-134b-4733-a31b-6fe79d4be348"
+      },
+      "execution_count": 7,
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": [
+              "<IPython.core.display.Javascript object>"
+            ],
+            "application/javascript": [
+              "\n",
+              "    async function download(id, filename, size) {\n",
+              "      if (!google.colab.kernel.accessAllowed) {\n",
+              "        return;\n",
+              "      }\n",
+              "      const div = document.createElement('div');\n",
+              "      const label = document.createElement('label');\n",
+              "      label.textContent = `Downloading \"${filename}\": `;\n",
+              "      div.appendChild(label);\n",
+              "      const progress = document.createElement('progress');\n",
+              "      progress.max = size;\n",
+              "      div.appendChild(progress);\n",
+              "      document.body.appendChild(div);\n",
+              "\n",
+              "      const buffers = [];\n",
+              "      let downloaded = 0;\n",
+              "\n",
+              "      const channel = await google.colab.kernel.comms.open(id);\n",
+              "      // Send a message to notify the kernel that we're ready.\n",
+              "      channel.send({})\n",
+              "\n",
+              "      for await (const message of channel.messages) {\n",
+              "        // Send a message to notify the kernel that we're ready.\n",
+              "        channel.send({})\n",
+              "        if (message.buffers) {\n",
+              "          for (const buffer of message.buffers) {\n",
+              "            buffers.push(buffer);\n",
+              "            downloaded += buffer.byteLength;\n",
+              "            progress.value = downloaded;\n",
+              "          }\n",
+              "        }\n",
+              "      }\n",
+              "      const blob = new Blob(buffers, {type: 'application/binary'});\n",
+              "      const a = document.createElement('a');\n",
+              "      a.href = window.URL.createObjectURL(blob);\n",
+              "      a.download = filename;\n",
+              "      div.appendChild(a);\n",
+              "      a.click();\n",
+              "      div.remove();\n",
+              "    }\n",
+              "  "
+            ]
+          },
+          "metadata": {}
+        },
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": [
+              "<IPython.core.display.Javascript object>"
+            ],
+            "application/javascript": [
+              "download(\"download_00b2be7d-d489-4a19-b848-cb04749aab26\", \"best_ecg_model_v2.h5\", 37428032)"
+            ]
+          },
+          "metadata": {}
+        }
+      ]
+    }
+  ]
+}
